@@ -1,0 +1,5 @@
+{
+  "name": "Samsung Soundbar",
+  "domains": ["media_player"],
+  "render_readme": true
+}
