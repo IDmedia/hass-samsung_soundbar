@@ -269,11 +269,11 @@ class MultiRoomDevice(MediaPlayerEntity):
     await self.api.set_source(source)
     self._current_source = source
 
-  async def turn_off(self):
+  async def async_turn_off(self):
       """Turn the media player off."""
       await self.api.set_state(0)
 
-  async def turn_on(self):
+  async def async_turn_on(self):
       """Turn the media player on."""
       await self.api.set_state(1)
 
