@@ -291,14 +291,17 @@ class MultiRoomDevice(MediaPlayerEntity):
         self._state = STATE_ON
         "Get Current Source"
         source = await self.api.get_source()
-        "Source 0 is type on input"
-        if source[0]:
-          self._current_source = source[0]
-        "Source 1 is input mode"
-        if source[1]:
-          self._mode = source[1]
+        if source is not None:
+          "Source 0 is type on input"
+          if source[0]:
+            self._current_source = source[0]
+          "Source 1 is input mode"
+          if source[1]:
+            self._mode = source[1]
+          else:
+            self._mode = ''
         else:
-          self._mode = ''
+            self._mode = ''
         "Get Volume"
         volume = await self.api.get_volume()
         if volume[0]:
