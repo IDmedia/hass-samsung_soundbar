@@ -12,7 +12,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 _LOGGER = logging.getLogger(__name__)
 
-VERSION = '0.0.3'
+VERSION = '1.0.0'
 
 DOMAIN = "samsung_soundbar"
 
