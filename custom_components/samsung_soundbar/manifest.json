@@ -1,6 +1,7 @@
 {
   "domain": "samsung_soundbar",
   "name": "Samsung Soundbar",
+  "version": "1.0.0",
   "documentation": "https://github.com/IDmedia/hass-samsung_soundbar",
   "dependencies": ["http"],
   "codeowners": ["@IDmedia"],
