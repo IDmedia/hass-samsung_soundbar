@@ -86,7 +86,7 @@ class MultiRoomApi():
     url = '{0}/{1}?{2}'.format(self.endpoint, mode, query)
 
     try:
-      with async_timeout.timeout(TIMEOUT, loop=self.hass.loop):
+      with async_timeout.timeout(TIMEOUT):
         _LOGGER.debug("Executing: {} with cmd: {}".format(url, cmd))
         response = await self.session.get(url)
         data = await response.text()
