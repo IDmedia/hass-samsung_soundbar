@@ -23,17 +23,11 @@ from homeassistant.helpers import config_validation as cv
 
 from homeassistant.components.media_player import (
   MediaPlayerEntity,
+  MediaPlayerEntityFeature,
   PLATFORM_SCHEMA
 )
 
-from homeassistant.components.media_player.const import (
-  MEDIA_TYPE_CHANNEL,
-  SUPPORT_TURN_ON,
-  SUPPORT_TURN_OFF,
-  SUPPORT_VOLUME_MUTE,
-  SUPPORT_SELECT_SOURCE,
-  SUPPORT_VOLUME_SET,
-)
+from homeassistant.components.media_player.const import MEDIA_TYPE_CHANNEL
 
 from homeassistant.const import (
   CONF_NAME,
@@ -58,7 +52,14 @@ DEFAULT_MAX_VOLUME = '40'
 BOOL_OFF = 'off'
 BOOL_ON = 'on'
 TIMEOUT = 2
-SUPPORT_SAMSUNG_MULTI_ROOM = SUPPORT_VOLUME_SET | SUPPORT_VOLUME_MUTE | SUPPORT_SELECT_SOURCE
+SUPPORT_SAMSUNG_MULTI_ROOM = (
+  MediaPlayerEntityFeature.VOLUME_SET
+  | MediaPlayerEntityFeature.VOLUME_MUTE
+  | MediaPlayerEntityFeature.SELECT_SOURCE
+)
+
+
+MediaPlayerEntityFeature
 
 CONF_MAX_VOLUME = 'max_volume'
 CONF_PORT = 'port'
@@ -199,7 +200,7 @@ class MultiRoomDevice(MediaPlayerEntity):
   def supported_features(self):
     """Flag media player features that are supported."""
     if self._power_options:
-      return SUPPORT_SAMSUNG_MULTI_ROOM | SUPPORT_TURN_OFF | SUPPORT_TURN_ON
+      return SUPPORT_SAMSUNG_MULTI_ROOM | MediaPlayerEntityFeature.TURN_OFF | MediaPlayerEntityFeature.TURN_ON
     return SUPPORT_SAMSUNG_MULTI_ROOM
 
 
@@ -357,4 +358,3 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
   session = async_get_clientsession(hass)
   api = MultiRoomApi(ip, port, session, hass)
   add_devices([MultiRoomDevice(name, max_volume, power_options ,api)], True)
-
