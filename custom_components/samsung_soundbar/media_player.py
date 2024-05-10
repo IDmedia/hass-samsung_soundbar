@@ -33,6 +33,7 @@ from homeassistant.const import (
   CONF_NAME,
   CONF_HOST,
   STATE_IDLE,
+  STATE_PLAYING,
   STATE_ON,
   STATE_OFF
 )
