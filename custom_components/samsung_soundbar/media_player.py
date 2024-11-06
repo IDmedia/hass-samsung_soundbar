@@ -43,7 +43,8 @@ MULTI_ROOM_SOURCE_TYPE = [
   'hdmi2',
   'optical',
   'bt',
-  'wifi'
+  'wifi',
+  'aux'
 ]
 
 DEFAULT_NAME = 'Samsung Soundbar'
