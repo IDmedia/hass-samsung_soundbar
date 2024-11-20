@@ -32,6 +32,7 @@ from homeassistant.components.media_player.const import MEDIA_TYPE_CHANNEL
 from homeassistant.const import (
   CONF_NAME,
   CONF_HOST,
+  CONF_UNIQUE_ID,
   STATE_IDLE,
   STATE_PLAYING,
   STATE_ON,
@@ -68,6 +69,7 @@ CONF_POWER_OPTIONS = 'power_options'
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
   vol.Required(CONF_HOST, default='127.0.0.1'): cv.string,
+  vol.Optional(CONF_UNIQUE_ID): cv.string,
   vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
   vol.Optional(CONF_PORT, default=DEFAULT_PORT): cv.string,
   vol.Optional(CONF_MAX_VOLUME, default=DEFAULT_MAX_VOLUME): cv.string,
@@ -183,7 +185,7 @@ class MultiRoomApi():
 
 class MultiRoomDevice(MediaPlayerEntity):
   """Representation of a Samsung MultiRoom device."""
-  def __init__(self, name, max_volume, power_options ,api):
+  def __init__(self, name, max_volume, power_options ,api, unique_id):
     _LOGGER.info('Initializing MultiRoomDevice')
     self._name = name
     self.api = api
@@ -196,6 +198,7 @@ class MultiRoomDevice(MediaPlayerEntity):
     self._muted = False
     self._max_volume = max_volume
     self._power_options = power_options
+    self._attr_unique_id = unique_id
 
   @property
   def supported_features(self):
@@ -356,6 +359,7 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
   name = config.get(CONF_NAME)
   max_volume = int(config.get(CONF_MAX_VOLUME))
   power_options = config.get(CONF_POWER_OPTIONS)
+  unique_id = config.get(CONF_UNIQUE_ID)
   session = async_get_clientsession(hass)
   api = MultiRoomApi(ip, port, session, hass)
-  add_devices([MultiRoomDevice(name, max_volume, power_options ,api)], True)
+  add_devices([MultiRoomDevice(name, max_volume, power_options ,api, unique_id)], True)
