@@ -38,10 +38,12 @@ from homeassistant.const import (
 )
 
 MULTI_ROOM_SOURCE_TYPE = [
+  'digital',
   'hdmi1',
   'hdmi2',
   'optical',
   'bt',
+  'aux',
   'wifi'
 ]
 
