@@ -70,6 +70,7 @@ CONF_POWER_OPTIONS = 'power_options'
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
   vol.Required(CONF_HOST, default='127.0.0.1'): cv.string,
   vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
+  vol.Optional(CONF_UNIQUE_ID, default=DEFAULT_NAME): cv.string,
   vol.Optional(CONF_PORT, default=DEFAULT_PORT): cv.string,
   vol.Optional(CONF_MAX_VOLUME, default=DEFAULT_MAX_VOLUME): cv.string,
   vol.Optional(CONF_POWER_OPTIONS, default=DEFAULT_POWER_OPTIONS): cv.boolean
@@ -184,9 +185,10 @@ class MultiRoomApi():
 
 class MultiRoomDevice(MediaPlayerEntity):
   """Representation of a Samsung MultiRoom device."""
-  def __init__(self, name, max_volume, power_options ,api):
+  def __init__(self, name, unique_id, max_volume, power_options ,api):
     _LOGGER.info('Initializing MultiRoomDevice')
     self._name = name
+    self._unique_id = unique_id
     self.api = api
     self._state = STATE_OFF
     self._current_source = None
@@ -205,11 +207,15 @@ class MultiRoomDevice(MediaPlayerEntity):
       return SUPPORT_SAMSUNG_MULTI_ROOM | MediaPlayerEntityFeature.TURN_OFF | MediaPlayerEntityFeature.TURN_ON
     return SUPPORT_SAMSUNG_MULTI_ROOM
 
-
   @property
   def name(self):
     """Return the name of the device."""
     return self._name
+
+  @property
+  def unique_id(self):
+    """Return a unique ID."""
+    return self._unique_id
 
   @property
   def media_title(self):
@@ -355,8 +361,9 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
   ip = config.get(CONF_HOST)
   port = config.get(CONF_PORT)
   name = config.get(CONF_NAME)
+  unique_id = config.get(CONF_UNIQUE_ID)
   max_volume = int(config.get(CONF_MAX_VOLUME))
   power_options = config.get(CONF_POWER_OPTIONS)
   session = async_get_clientsession(hass)
   api = MultiRoomApi(ip, port, session, hass)
-  add_devices([MultiRoomDevice(name, max_volume, power_options ,api)], True)
+  add_devices([MultiRoomDevice(name, unique_id, max_volume, power_options ,api)], True)
