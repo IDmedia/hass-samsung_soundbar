@@ -27,8 +27,6 @@ from homeassistant.components.media_player import (
   PLATFORM_SCHEMA
 )
 
-from homeassistant.components.media_player.const import MEDIA_TYPE_CHANNEL
-
 from homeassistant.const import (
   CONF_NAME,
   CONF_HOST,
