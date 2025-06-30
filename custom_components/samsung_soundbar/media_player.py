@@ -352,14 +352,14 @@ class MultiRoomDevice(MediaPlayerEntity):
       if muted:
         self._muted = muted
 
-def setup_platform(hass, config, add_devices, discovery_info=None):
-  """Set up the Samsung MultiRoom platform."""
-  ip = config.get(CONF_HOST)
-  port = config.get(CONF_PORT)
-  name = config.get(CONF_NAME)
-  max_volume = int(config.get(CONF_MAX_VOLUME))
-  power_options = config.get(CONF_POWER_OPTIONS)
-  unique_id = config.get(CONF_UNIQUE_ID)
-  session = async_get_clientsession(hass)
-  api = MultiRoomApi(ip, port, session, hass)
-  add_devices([MultiRoomDevice(name, max_volume, power_options ,api, unique_id)], True)
+async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
+    """Set up the Samsung MultiRoom platform asynchronously."""
+    ip = config.get(CONF_HOST)
+    port = config.get(CONF_PORT)
+    name = config.get(CONF_NAME)
+    max_volume = int(config.get(CONF_MAX_VOLUME))
+    power_options = config.get(CONF_POWER_OPTIONS)
+    unique_id = config.get(CONF_UNIQUE_ID)
+    session = async_get_clientsession(hass)
+    api = MultiRoomApi(ip, port, session, hass)
+    async_add_entities([MultiRoomDevice(name, max_volume, power_options, api, unique_id)], True)
