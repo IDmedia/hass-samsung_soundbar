@@ -128,12 +128,87 @@ async def test_get_speaker_name_plain(hass):
   result = await api.get_speaker_name()
   assert result == ["Office Soundbar"]
 
-
 async def test_get_speaker_name_cdata(hass):
   """get_speaker_name strips CDATA wrapper and returns the bare name."""
   api = _make_api("<UIC><response result='ok'><spkname><![CDATA[Office Soundbar]]></spkname></response></UIC>")
   result = await api.get_speaker_name()
   assert result == ["Office Soundbar"]
+
+async def test_get_state_on(hass):
+  """get_state returns '1' when the soundbar is powered on."""
+  api = _make_api("<UIC><response result='ok'><powerStatus>1</powerStatus></response></UIC>")
+  result = await api.get_state()
+  assert result == "1"
+
+async def test_get_volume(hass):
+  """get_volume returns the volume level as a single-element list."""
+  api = _make_api("<UIC><response result='ok'><volume>15</volume></response></UIC>")
+  result = await api.get_volume()
+  assert result == ["15"]
+
+# --- get_muted ---
+async def test_get_muted_when_muted(hass):
+  """get_muted returns False even when the device reports muted.
+
+  Bug: _exec_get returns a list (e.g. ['on']), which is compared with == to the
+  string BOOL_ON ('on'). A list never equals a string, so this always returns False.
+  """
+  api = _make_api("<UIC><response result='ok'><mute>on</mute></response></UIC>")
+  result = await api.get_muted()
+  assert result == False  # noqa: E712 — documenting broken list-vs-string comparison
+
+async def test_get_muted_when_unmuted(hass):
+  """get_muted returns False when the device reports unmuted."""
+  api = _make_api("<UIC><response result='ok'><mute>off</mute></response></UIC>")
+  result = await api.get_muted()
+  assert result == False  # noqa: E712
+
+
+async def test_get_radio_info(hass):
+  """get_radio_info returns the title in a single-element list."""
+  api = _make_api("<CPM><response result='ok'><title>My Song</title></response></CPM>")
+  result = await api.get_radio_info()
+  assert result == ["My Song"]
+
+async def test_get_radio_info_cdata_not_stripped(hass):
+  """get_radio_info does not strip CDATA; the raw markup is returned as-is."""
+  api = _make_api("<CPM><response result='ok'><title><![CDATA[My Song]]></title></response></CPM>")
+  result = await api.get_radio_info()
+  assert result == ["<![CDATA[My Song]]>"]
+
+async def test_get_radio_image(hass):
+  """get_radio_image returns the thumbnail URL in a single-element list."""
+  api = _make_api("<CPM><response result='ok'><thumbnail>http://example.com/img.jpg</thumbnail></response></CPM>")
+  result = await api.get_radio_image()
+  assert result == ["http://example.com/img.jpg"]
+
+async def test_get_source_physical_input(hass):
+  """get_source returns [function, False] for physical inputs like hdmi1."""
+  api = _make_api('<UIC><response result="ok"><function>hdmi1</function><submode></submode></response></UIC>')
+  result = await api.get_source()
+  assert result == ["hdmi1", False]
+
+
+async def test_get_source_bluetooth(hass):
+  """get_source returns ['bt', False] for Bluetooth (no submode lookup)."""
+  api = _make_api('<UIC><response result="ok"><function>bt</function></response></UIC>')
+  result = await api.get_source()
+  assert result == ["bt", False]
+
+
+async def test_get_source_wifi_tunein(hass):
+  """get_source returns ['wifi', 'TuneIn'] when submode is 'cp' (streaming)."""
+  api = _make_api('<UIC><response result="ok"><function>wifi</function><submode>cp</submode></response></UIC>')
+  result = await api.get_source()
+  assert result == ["wifi", "TuneIn"]
+
+
+async def test_get_source_wifi_other_submode(hass):
+  """get_source returns ['wifi', False] for wifi with a non-cp submode."""
+  api = _make_api('<UIC><response result="ok"><function>wifi</function><submode>dlna</submode></response></UIC>')
+  result = await api.get_source()
+  assert result == ["wifi", False]
+
 
 async def test_yaml_update_scales_volume_from_device_nondefault_max(hass):
   """async_update scaling works correctly with a non-default max_volume."""
