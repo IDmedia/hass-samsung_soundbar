@@ -4,6 +4,7 @@ import aiohttp
 import asyncio
 import re
 import logging
+import xmltodict
 import voluptuous as vol
 import homeassistant.util as util
 
@@ -70,8 +71,21 @@ class MultiRoomApi():
     self.port = port
     self.endpoint = 'http://{0}:{1}'.format(ip, port)
 
-  async def _exec_cmd(self, mode ,cmd, key_to_extract):
-    import xmltodict
+  async def _exec_cmd(self, mode, cmd):
+    query = urllib.parse.urlencode({ "cmd": cmd }, quote_via=urllib.parse.quote)
+    url = '{0}/{1}?{2}'.format(self.endpoint, mode, query)
+    try:
+      async with async_timeout.timeout(TIMEOUT):
+        _LOGGER.debug("Executing: {} with cmd: {}".format(url, cmd))
+        response = await self.session.get(url)
+        data = await response.text()
+        _LOGGER.debug(data)
+        return data or None
+    except:
+      _LOGGER.debug("exception")
+      return None
+
+  async def _exec_cmd_legacy(self, mode, cmd, key_to_extract):
     query = urllib.parse.urlencode({ "cmd": cmd }, quote_via=urllib.parse.quote)
     url = '{0}/{1}?{2}'.format(self.endpoint, mode, query)
 
@@ -89,7 +103,7 @@ class MultiRoomApi():
       return None
 
   async def _exec_get(self, mode, action, key_to_extract):
-    return await self._exec_cmd(mode, '<name>{0}</name>'.format(action), key_to_extract)
+    return await self._exec_cmd_legacy(mode, '<name>{0}</name>'.format(action), key_to_extract)
 
   async def _exec_set(self, mode, action, property_name, value):
     if type(value) is str:
@@ -97,7 +111,7 @@ class MultiRoomApi():
     else:
       value_type = 'dec'
     cmd = '<name>{0}</name><p type="{3}" name="{1}" val="{2}"/>'.format(action, property_name, value, value_type)
-    return await self._exec_cmd(mode, cmd, property_name)
+    return await self._exec_cmd_legacy(mode, cmd, property_name)
 
   async def _exec_play(self, mode, action, property_name, value, p2, v2):
     if type(value) is str:
@@ -105,7 +119,7 @@ class MultiRoomApi():
     else:
       value_type = 'dec'
     cmd = '<name>{0}</name><p type="{3}" name="{1}" val="{2}"/><p type="{3}" name="{4}" val="{5}"/>'.format(action, property_name, value, value_type, p2, v2)
-    return await self._exec_cmd(mode, cmd, property_name)
+    return await self._exec_cmd_legacy(mode, cmd, property_name)
 
   async def get_state(self):
     result = await self._exec_get('UIC','GetPowerStatus', '<powerStatus>(.*?)</powerStatus>')
@@ -145,21 +159,23 @@ class MultiRoomApi():
 
   async def get_source(self):
     "res[0] = source ; res[1] = mode"
-    res = []
-    result = await self._exec_get('UIC','GetFunc', '<response result="ok">(.*?)</response>')
-    if result:
-      function = re.findall('<function>(.*?)</function>',result[0])[0]
-      res.append(function)
+    data = await self._exec_cmd('UIC', '<name>GetFunc</name>')
+    if not data:
+      return None
+    try:
+      parsed = xmltodict.parse(data)
+      response = parsed.get('UIC', {}).get('response', {})
+      if response.get('@result') != 'ok':
+        return None
+      function = response.get('function')
+      if function is None:
+        return None
       if function == 'bt':
-        res.append(False)
-      else:
-        mode = re.findall('<submode>(.*?)</submode>',result[0])
-        if mode and mode[0] == 'cp':
-          res.append('TuneIn')
-        else:
-          res.append(False)
-      return res
-    return None
+        return [function, False]
+      submode = response.get('submode')
+      return [function, 'TuneIn' if submode == 'cp' else False]
+    except Exception:
+      return None
 
   async def set_source(self, source):
     SEPARATOR = ' - '
