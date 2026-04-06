@@ -158,7 +158,6 @@ class MultiRoomApi():
       await self._exec_set('UIC','SetMute', 'mute', BOOL_OFF)
 
   async def get_source(self):
-    "res[0] = source ; res[1] = mode"
     data = await self._exec_cmd('UIC', '<name>GetFunc</name>')
     if not data:
       return None
@@ -171,9 +170,9 @@ class MultiRoomApi():
       if function is None:
         return None
       if function == 'bt':
-        return [function, False]
+        return {'mode': function, 'submode': False}
       submode = response.get('submode')
-      return [function, 'TuneIn' if submode == 'cp' else False]
+      return {'mode': function, 'submode': 'TuneIn' if submode == 'cp' else False}
     except Exception:
       return None
 
@@ -299,12 +298,10 @@ class MultiRoomDevice(MediaPlayerEntity):
         "Get Current Source"
         source = await self.api.get_source()
         if source is not None:
-          "Source 0 is type on input"
-          if source[0]:
-            self._current_source = source[0]
-          "Source 1 is input mode"
-          if source[1]:
-            self._mode = source[1]
+          if source['mode']:
+            self._current_source = source['mode']
+          if source['submode']:
+            self._mode = source['submode']
           else:
             self._mode = ''
         else:
@@ -341,7 +338,7 @@ class MultiRoomDevice(MediaPlayerEntity):
       "Get Current Source"
       source = await self.api.get_source()
       if source:
-        self._current_source = source[0]
+        self._current_source = source['mode']
         self._state = STATE_ON
       else:
         self._state = STATE_OFF

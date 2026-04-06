@@ -102,7 +102,7 @@ async def test_yaml_update_scales_volume_from_device(hass):
   entities = await _setup_platform(hass, BASE_YAML_CONFIG)
   entity = entities[0]
   entity.api.get_state = AsyncMock(return_value="1")
-  entity.api.get_source = AsyncMock(return_value=["hdmi1", False])
+  entity.api.get_source = AsyncMock(return_value={'mode': 'hdmi1', 'submode': False})
   entity.api.get_volume = AsyncMock(return_value=["10"])
   entity.api.get_muted = AsyncMock(return_value=False)
 
@@ -183,31 +183,31 @@ async def test_get_radio_image(hass):
   assert result == ["http://example.com/img.jpg"]
 
 async def test_get_source_physical_input(hass):
-  """get_source returns [function, False] for physical inputs like hdmi1."""
+  """get_source returns {'mode': function, 'submode': False} for physical inputs like hdmi1."""
   api = _make_api('<UIC><response result="ok"><function>hdmi1</function><submode></submode></response></UIC>')
   result = await api.get_source()
-  assert result == ["hdmi1", False]
+  assert result == {'mode': 'hdmi1', 'submode': False}
 
 
 async def test_get_source_bluetooth(hass):
-  """get_source returns ['bt', False] for Bluetooth (no submode lookup)."""
+  """get_source returns {'mode': 'bt', 'submode': False} for Bluetooth (no submode lookup)."""
   api = _make_api('<UIC><response result="ok"><function>bt</function></response></UIC>')
   result = await api.get_source()
-  assert result == ["bt", False]
+  assert result == {'mode': 'bt', 'submode': False}
 
 
 async def test_get_source_wifi_tunein(hass):
-  """get_source returns ['wifi', 'TuneIn'] when submode is 'cp' (streaming)."""
+  """get_source returns {'mode': 'wifi', 'submode': 'TuneIn'} when submode is 'cp' (streaming)."""
   api = _make_api('<UIC><response result="ok"><function>wifi</function><submode>cp</submode></response></UIC>')
   result = await api.get_source()
-  assert result == ["wifi", "TuneIn"]
+  assert result == {'mode': 'wifi', 'submode': 'TuneIn'}
 
 
 async def test_get_source_wifi_other_submode(hass):
-  """get_source returns ['wifi', False] for wifi with a non-cp submode."""
+  """get_source returns {'mode': 'wifi', 'submode': False} for wifi with a non-cp submode."""
   api = _make_api('<UIC><response result="ok"><function>wifi</function><submode>dlna</submode></response></UIC>')
   result = await api.get_source()
-  assert result == ["wifi", False]
+  assert result == {'mode': 'wifi', 'submode': False}
 
 
 async def test_yaml_update_scales_volume_from_device_nondefault_max(hass):
@@ -215,7 +215,7 @@ async def test_yaml_update_scales_volume_from_device_nondefault_max(hass):
   entities = await _setup_platform(hass, {**BASE_YAML_CONFIG, CONF_MAX_VOLUME: "60"})
   entity = entities[0]
   entity.api.get_state = AsyncMock(return_value="1")
-  entity.api.get_source = AsyncMock(return_value=["hdmi1", False])
+  entity.api.get_source = AsyncMock(return_value={'mode': 'hdmi1', 'submode': False})
   entity.api.get_volume = AsyncMock(return_value=["15"])
   entity.api.get_muted = AsyncMock(return_value=False)
 
