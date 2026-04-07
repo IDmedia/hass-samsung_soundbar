@@ -184,28 +184,35 @@ async def test_get_radio_image(hass):
 
 async def test_get_source_physical_input(hass):
   """get_source returns {'mode': function, 'submode': False} for physical inputs like hdmi1."""
-  api = _make_api('<UIC><response result="ok"><function>hdmi1</function><submode></submode></response></UIC>')
+  api = _make_api('<UIC><method>CurrentFunc</method><response result="ok"><function>hdmi1</function><submode></submode></response></UIC>')
   result = await api.get_source()
   assert result == {'mode': 'hdmi1', 'submode': False}
 
 
 async def test_get_source_bluetooth(hass):
   """get_source returns {'mode': 'bt', 'submode': False} for Bluetooth (no submode lookup)."""
-  api = _make_api('<UIC><response result="ok"><function>bt</function></response></UIC>')
+  api = _make_api('<UIC><method>CurrentFunc</method><response result="ok"><function>bt</function></response></UIC>')
   result = await api.get_source()
   assert result == {'mode': 'bt', 'submode': False}
 
 
 async def test_get_source_wifi_tunein(hass):
   """get_source returns {'mode': 'wifi', 'submode': 'TuneIn'} when submode is 'cp' (streaming)."""
-  api = _make_api('<UIC><response result="ok"><function>wifi</function><submode>cp</submode></response></UIC>')
+  api = _make_api('<UIC><method>CurrentFunc</method><response result="ok"><function>wifi</function><submode>cp</submode></response></UIC>')
   result = await api.get_source()
   assert result == {'mode': 'wifi', 'submode': 'TuneIn'}
 
 
 async def test_get_source_wifi_other_submode(hass):
   """get_source returns {'mode': 'wifi', 'submode': False} for wifi with a non-cp submode."""
-  api = _make_api('<UIC><response result="ok"><function>wifi</function><submode>dlna</submode></response></UIC>')
+  api = _make_api('<UIC><method>CurrentFunc</method><response result="ok"><function>wifi</function><submode>dlna</submode></response></UIC>')
+  result = await api.get_source()
+  assert result == {'mode': 'wifi', 'submode': False}
+
+
+async def test_get_source_wifi_non_currentfunc_response(hass):
+  """get_source infers wifi when GetFunc returns any non-CurrentFunc response."""
+  api = _make_api('<UIC><method>VolumeLevel</method><version>1.0</version><response result="ok"><volume>10</volume></response></UIC>')
   result = await api.get_source()
   assert result == {'mode': 'wifi', 'submode': False}
 

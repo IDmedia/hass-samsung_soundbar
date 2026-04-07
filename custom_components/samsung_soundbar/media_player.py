@@ -163,7 +163,13 @@ class MultiRoomApi():
       return None
     try:
       parsed = xmltodict.parse(data)
-      response = parsed.get('UIC', {}).get('response', {})
+      uic = parsed.get('UIC', {})
+      # When in WiFi mode, GetFunc may return a non-CurrentFunc response (e.g. VolumeLevel,
+      # PowerStatus) instead of a CurrentFunc response with a <function> element.
+      # This seems to only happen in WiFi mode, so just assume that's the state.
+      if uic.get('method') != 'CurrentFunc':
+        return {'mode': 'wifi', 'submode': False}
+      response = uic.get('response', {})
       if response.get('@result') != 'ok':
         return None
       function = response.get('function')
