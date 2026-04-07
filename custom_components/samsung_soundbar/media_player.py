@@ -293,69 +293,69 @@ class MultiRoomDevice(MediaPlayerEntity):
   async def async_update(self):
     """Update the media player State."""
     _LOGGER.info('Refreshing state...')
-    "Update with power options"
     if self._power_options:
-      "Get Power State"
-      state = await self.api.get_state()
-      _LOGGER.debug(state)
-      if state and int(state) == 1:
-        "If Power is ON, update other values"
-        self._state = STATE_ON
-        "Get Current Source"
-        source = await self.api.get_source()
-        if source is not None:
-          if source['mode']:
-            self._current_source = source['mode']
-          if source['submode']:
-            self._mode = source['submode']
-          else:
-            self._mode = ''
-        else:
-            self._mode = ''
-        try:
-          "Get Volume"
-          volume = await self.api.get_volume()
-          if volume[0]:
-            self._volume = int(volume[0]) / self._max_volume
-        except:
-          _LOGGER.error("Failed to get volume")
-        "Get Mute State"
-        muted = await self.api.get_muted()
-        if muted:
-          self._muted = muted
-        if self._mode == 'TuneIn':
-          title = await self.api.get_radio_info()
-          if title:
-            self._media_title = str(title[0])
-          image = await self.api.get_radio_image()
-          if image:
-            self._image_url = str(image[0])
-        else:
-          self._media_title = ''
-          self._image_url = None
+      await self._update_with_power_options()
+    else:
+      await self._update_without_power_options()
+
+  async def _update_with_power_options(self):
+    state = await self.api.get_state()
+    _LOGGER.debug(state)
+    if state and int(state) == 1:
+      self._state = STATE_ON
+      await self._refresh_active_state()
+      if self._mode == 'TuneIn':
+        await self._refresh_media_info()
       else:
-        self._state = STATE_OFF
         self._media_title = ''
         self._image_url = None
     else:
-      "Update without power options"
+      self._state = STATE_OFF
       self._media_title = ''
       self._image_url = None
-      "Get Current Source"
-      source = await self.api.get_source()
-      if source:
-        self._current_source = source['mode']
-        self._state = STATE_ON
-      else:
-        self._state = STATE_OFF
-      "Get Volume"
+
+  async def _update_without_power_options(self):
+    self._media_title = ''
+    self._image_url = None
+    source = await self.api.get_source()
+    self._state = STATE_ON if source else STATE_OFF
+    self._apply_source(source)
+    await self._refresh_volume()
+    await self._refresh_mute()
+
+  async def _refresh_active_state(self):
+    source = await self.api.get_source()
+    self._apply_source(source)
+    await self._refresh_volume()
+    await self._refresh_mute()
+
+  def _apply_source(self, source):
+    if source:
+      self._current_source = source['mode']
+      self._mode = source['submode'] or ''
+    else:
+      self._mode = ''
+
+  async def _refresh_volume(self):
+    try:
       volume = await self.api.get_volume()
-      if volume:
+      if volume and volume[0]:
         self._volume = int(volume[0]) / self._max_volume
-      "Get Mute State"
-      muted = await self.api.get_muted()
-      if muted:
-        self._muted = muted
+    except Exception:
+      _LOGGER.error("Failed to get volume")
+
+  async def _refresh_mute(self):
+    muted = await self.api.get_muted()
+    if muted:
+      self._muted = muted
+
+  async def _refresh_media_info(self):
+    title = await self.api.get_radio_info()
+    if title:
+      self._media_title = str(title[0])
+    image = await self.api.get_radio_image()
+    if image:
+      self._image_url = str(image[0])
 
 async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
     """Set up the Samsung MultiRoom platform asynchronously."""
