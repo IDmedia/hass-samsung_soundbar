@@ -71,11 +71,11 @@ class MultiRoomApi():
     self.port = port
     self.endpoint = 'http://{0}:{1}'.format(ip, port)
 
-  async def _exec_cmd(self, mode, cmd):
+  async def _exec_cmd(self, mode, cmd, timeout=TIMEOUT):
     query = urllib.parse.urlencode({ "cmd": cmd }, quote_via=urllib.parse.quote)
     url = '{0}/{1}?{2}'.format(self.endpoint, mode, query)
     try:
-      async with async_timeout.timeout(TIMEOUT):
+      async with async_timeout.timeout(timeout):
         _LOGGER.debug("Executing: {} with cmd: {}".format(url, cmd))
         response = await self.session.get(url)
         data = await response.text()
@@ -158,17 +158,19 @@ class MultiRoomApi():
       await self._exec_set('UIC','SetMute', 'mute', BOOL_OFF)
 
   async def get_source(self):
-    data = await self._exec_cmd('UIC', '<name>GetFunc</name>')
+    wifi_fallback = {'mode': 'wifi', 'submode': False}
+    data = await self._exec_cmd('UIC', '<name>GetFunc</name>', timeout=0.5)
     if not data:
-      return None
+      # GetFunc in WiFi mode blocks until an unsolicited push event (e.g. VolumeLevel) arrives
+      # instead of responding with CurrentFunc, so a timeout or empty response means WiFi mode.
+      return wifi_fallback
     try:
       parsed = xmltodict.parse(data)
       uic = parsed.get('UIC', {})
-      # When in WiFi mode, GetFunc may return a non-CurrentFunc response (e.g. VolumeLevel,
-      # PowerStatus) instead of a CurrentFunc response with a <function> element.
-      # This seems to only happen in WiFi mode, so just assume that's the state.
+      # A non-CurrentFunc response (e.g. VolumeLevel, PowerStatus) also indicates WiFi mode.
+      # These are just unsolicited push events that happen to arrive while we're waiting.
       if uic.get('method') != 'CurrentFunc':
-        return {'mode': 'wifi', 'submode': False}
+        return wifi_fallback
       response = uic.get('response', {})
       if response.get('@result') != 'ok':
         return None
