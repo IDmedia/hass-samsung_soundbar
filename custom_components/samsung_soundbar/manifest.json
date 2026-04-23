@@ -2,12 +2,21 @@
   "domain": "samsung_soundbar",
   "name": "Samsung Soundbar",
   "documentation": "https://github.com/IDmedia/hass-samsung_soundbar",
-  "dependencies": ["http"],
-  "version": "1.0.1",
+  "version": "1.2.0",
   "codeowners": [
     "@IDmedia"
   ],
   "requirements": [
     "xmltodict==0.11.0"
+  ],
+  "config_flow": true,
+  "ssdp": [
+    {
+      "st": "urn:schemas-upnp-org:device:MediaRenderer:1",
+      "manufacturer": "Samsung Electronics"
+    },
+    {
+      "st": "urn:samsung.com:device:RemoteControlReceiver:1"
+    }
   ]
 }

@@ -4,6 +4,7 @@ import aiohttp
 import asyncio
 import re
 import logging
+import xmltodict
 import voluptuous as vol
 import homeassistant.util as util
 
@@ -11,10 +12,6 @@ from datetime import timedelta
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 _LOGGER = logging.getLogger(__name__)
-
-VERSION = '1.0.0'
-
-DOMAIN = "samsung_soundbar"
 
 MIN_TIME_BETWEEN_SCANS = timedelta(seconds=3)
 MIN_TIME_BETWEEN_FORCED_SCANS = timedelta(seconds=3)
@@ -37,35 +34,25 @@ from homeassistant.const import (
   STATE_OFF
 )
 
-MULTI_ROOM_SOURCE_TYPE = [
-  'digital',
-  'hdmi1',
-  'hdmi2',
-  'optical',
-  'bt',
-  'aux',
-  'wifi'
-]
+from .const import (
+  DEFAULT_NAME,
+  DEFAULT_PORT,
+  DEFAULT_MAX_VOLUME,
+  DEFAULT_POWER_OPTIONS,
+  BOOL_OFF,
+  BOOL_ON,
+  TIMEOUT,
+  MULTI_ROOM_SOURCE_TYPE,
+  CONF_PORT,
+  CONF_MAX_VOLUME,
+  CONF_POWER_OPTIONS,
+)
 
-DEFAULT_NAME = 'Samsung Soundbar'
-DEFAULT_PORT = '56001'
-DEFAULT_POWER_OPTIONS = True
-DEFAULT_MAX_VOLUME = '40'
-BOOL_OFF = 'off'
-BOOL_ON = 'on'
-TIMEOUT = 2
 SUPPORT_SAMSUNG_MULTI_ROOM = (
   MediaPlayerEntityFeature.VOLUME_SET
   | MediaPlayerEntityFeature.VOLUME_MUTE
   | MediaPlayerEntityFeature.SELECT_SOURCE
 )
-
-
-MediaPlayerEntityFeature
-
-CONF_MAX_VOLUME = 'max_volume'
-CONF_PORT = 'port'
-CONF_POWER_OPTIONS = 'power_options'
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
   vol.Required(CONF_HOST, default='127.0.0.1'): cv.string,
@@ -84,13 +71,26 @@ class MultiRoomApi():
     self.port = port
     self.endpoint = 'http://{0}:{1}'.format(ip, port)
 
-  async def _exec_cmd(self, mode ,cmd, key_to_extract):
-    import xmltodict
+  async def _exec_cmd(self, mode, cmd, timeout=TIMEOUT):
+    query = urllib.parse.urlencode({ "cmd": cmd }, quote_via=urllib.parse.quote)
+    url = '{0}/{1}?{2}'.format(self.endpoint, mode, query)
+    try:
+      async with async_timeout.timeout(timeout):
+        _LOGGER.debug("Executing: {} with cmd: {}".format(url, cmd))
+        response = await self.session.get(url)
+        data = await response.text()
+        _LOGGER.debug(data)
+        return data or None
+    except:
+      _LOGGER.debug("exception")
+      return None
+
+  async def _exec_cmd_legacy(self, mode, cmd, key_to_extract):
     query = urllib.parse.urlencode({ "cmd": cmd }, quote_via=urllib.parse.quote)
     url = '{0}/{1}?{2}'.format(self.endpoint, mode, query)
 
     try:
-      with async_timeout.timeout(TIMEOUT):
+      async with async_timeout.timeout(TIMEOUT):
         _LOGGER.debug("Executing: {} with cmd: {}".format(url, cmd))
         response = await self.session.get(url)
         data = await response.text()
@@ -102,8 +102,25 @@ class MultiRoomApi():
       _LOGGER.debug("exception")
       return None
 
-  async def _exec_get(self, mode, action, key_to_extract):
-    return await self._exec_cmd(mode, '<name>{0}</name>'.format(action), key_to_extract)
+  async def _exec_get_xml(self, mode, action, expected_method, retries=3, timeout=TIMEOUT):
+    for attempt in range(retries):
+      data = await self._exec_cmd(mode, '<name>{0}</name>'.format(action), timeout=timeout)
+      if not data:
+        return None
+      try:
+        parsed = xmltodict.parse(data)
+        node = parsed.get(mode, {})
+        if node.get('method') != expected_method:
+          _LOGGER.debug("_exec_get_xml: expected method %s, got %s (attempt %d/%d)", expected_method, node.get('method'), attempt + 1, retries)
+          continue
+        response = node.get('response', {})
+        if response.get('@result') != 'ok':
+          return None
+        return response
+      except Exception:
+        return None
+    _LOGGER.warning("_exec_get_xml: no %s response after %d attempts", expected_method, retries)
+    return None
 
   async def _exec_set(self, mode, action, property_name, value):
     if type(value) is str:
@@ -111,7 +128,7 @@ class MultiRoomApi():
     else:
       value_type = 'dec'
     cmd = '<name>{0}</name><p type="{3}" name="{1}" val="{2}"/>'.format(action, property_name, value, value_type)
-    return await self._exec_cmd(mode, cmd, property_name)
+    return await self._exec_cmd_legacy(mode, cmd, property_name)
 
   async def _exec_play(self, mode, action, property_name, value, p2, v2):
     if type(value) is str:
@@ -119,37 +136,39 @@ class MultiRoomApi():
     else:
       value_type = 'dec'
     cmd = '<name>{0}</name><p type="{3}" name="{1}" val="{2}"/><p type="{3}" name="{4}" val="{5}"/>'.format(action, property_name, value, value_type, p2, v2)
-    return await self._exec_cmd(mode, cmd, property_name)
+    return await self._exec_cmd_legacy(mode, cmd, property_name)
 
   async def get_state(self):
-    result = await self._exec_get('UIC','GetPowerStatus', '<powerStatus>(.*?)</powerStatus>')
-    if result:
-      return result[0]
+    response = await self._exec_get_xml('UIC', 'GetPowerStatus', 'PowerStatus')
+    if response:
+      return response.get('powerStatus')
     return 0
 
   async def set_state(self, key):
     await self._exec_set('UIC','SetPowerStatus', 'powerStatus', int(key))
 
-  async def get_main_info(self):
-    return await self._exec_get('UIC','GetMainInfo')
-
   async def get_volume(self):
-    return await self._exec_get('UIC','GetVolume', '<volume>(.*?)</volume')
+    response = await self._exec_get_xml('UIC', 'GetVolume', 'VolumeLevel')
+    return response.get('volume') if response else None
 
   async def set_volume(self, volume):
     await self._exec_set('UIC','SetVolume', 'volume', int(volume))
 
   async def get_speaker_name(self):
-    return await self._exec_get('UIC','GetSpkName', '<spkname>(.*?)</spkname>')
+    response = await self._exec_get_xml('UIC', 'GetSpkName', 'SpkName')
+    return response.get('spkname') if response else None
 
   async def get_radio_info(self):
-    return await self._exec_get('CPM','GetRadioInfo', '<title>(.*?)</title>')
+    response = await self._exec_get_xml('CPM', 'GetRadioInfo', 'RadioInfo')
+    return response.get('title') if response else None
 
   async def get_radio_image(self):
-    return await self._exec_get('CPM','GetRadioInfo', '<thumbnail>(.*?)</thumbnail>')
+    response = await self._exec_get_xml('CPM', 'GetRadioInfo', 'RadioInfo')
+    return response.get('thumbnail') if response else None
 
   async def get_muted(self):
-    return await self._exec_get('UIC','GetMute', '<mute>(.*?)</mute>') == BOOL_ON
+    response = await self._exec_get_xml('UIC', 'GetMute', 'MuteStatus')
+    return response.get('mute') == BOOL_ON if response else False
 
   async def set_muted(self, mute):
     if mute:
@@ -158,22 +177,19 @@ class MultiRoomApi():
       await self._exec_set('UIC','SetMute', 'mute', BOOL_OFF)
 
   async def get_source(self):
-    "res[0] = source ; res[1] = mode"
-    res = []
-    result = await self._exec_get('UIC','GetFunc', '<response result="ok">(.*?)</response>')
-    if result:
-      function = re.findall('<function>(.*?)</function>',result[0])[0]
-      res.append(function)
-      if function == 'bt':
-        res.append(False)
-      else:
-        mode = re.findall('<submode>(.*?)</submode>',result[0])
-        if mode and mode[0] == 'cp':
-          res.append('TuneIn')
-        else:
-          res.append(False)
-      return res
-    return None
+    # GetFunc in WiFi mode never returns CurrentFunc — it times out or delivers push events.
+    # _exec_get_xml retries on wrong-method responses and returns None on timeout or exhaustion;
+    # both map to wifi_fallback here.
+    response = await self._exec_get_xml('UIC', 'GetFunc', 'CurrentFunc', timeout=0.5)
+    if response is None:
+      return {'mode': 'wifi', 'submode': False}
+    function = response.get('function')
+    if function is None:
+      return None
+    if function == 'bt':
+      return {'mode': function, 'submode': False}
+    submode = response.get('submode')
+    return {'mode': function, 'submode': 'TuneIn' if submode == 'cp' else False}
 
   async def set_source(self, source):
     SEPARATOR = ' - '
@@ -286,71 +302,69 @@ class MultiRoomDevice(MediaPlayerEntity):
   async def async_update(self):
     """Update the media player State."""
     _LOGGER.info('Refreshing state...')
-    "Update with power options"
     if self._power_options:
-      "Get Power State"
-      state = await self.api.get_state()
-      _LOGGER.debug(state)
-      if state and int(state) == 1:
-        "If Power is ON, update other values"
-        self._state = STATE_ON
-        "Get Current Source"
-        source = await self.api.get_source()
-        if source is not None:
-          "Source 0 is type on input"
-          if source[0]:
-            self._current_source = source[0]
-          "Source 1 is input mode"
-          if source[1]:
-            self._mode = source[1]
-          else:
-            self._mode = ''
-        else:
-            self._mode = ''
-        try:
-          "Get Volume"
-          volume = await self.api.get_volume()
-          if volume[0]:
-            self._volume = int(volume[0]) / self._max_volume
-        except:
-          _LOGGER.error("Failed to get volume")
-        "Get Mute State"
-        muted = await self.api.get_muted()
-        if muted:
-          self._muted = muted
-        if self._mode == 'TuneIn':
-          title = await self.api.get_radio_info()
-          if title:
-            self._media_title = str(title[0])
-          image = await self.api.get_radio_image()
-          if image:
-            self._image_url = str(image[0])
-        else:
-          self._media_title = ''
-          self._image_url = None
+      await self._update_with_power_options()
+    else:
+      await self._update_without_power_options()
+
+  async def _update_with_power_options(self):
+    state = await self.api.get_state()
+    _LOGGER.debug(state)
+    if state and int(state) == 1:
+      self._state = STATE_ON
+      await self._refresh_active_state()
+      if self._mode == 'TuneIn':
+        await self._refresh_media_info()
       else:
-        self._state = STATE_OFF
         self._media_title = ''
         self._image_url = None
     else:
-      "Update without power options"
+      self._state = STATE_OFF
       self._media_title = ''
       self._image_url = None
-      "Get Current Source"
-      source = await self.api.get_source()
-      if source:
-        self._current_source = source[0]
-        self._state = STATE_PLAYING
-      else:
-        self._state = STATE_OFF
-      "Get Volume"
+
+  async def _update_without_power_options(self):
+    self._media_title = ''
+    self._image_url = None
+    source = await self.api.get_source()
+    self._state = STATE_ON if source else STATE_OFF
+    self._apply_source(source)
+    await self._refresh_volume()
+    await self._refresh_mute()
+
+  async def _refresh_active_state(self):
+    source = await self.api.get_source()
+    self._apply_source(source)
+    await self._refresh_volume()
+    await self._refresh_mute()
+
+  def _apply_source(self, source):
+    if source:
+      self._current_source = source['mode']
+      self._mode = source['submode'] or ''
+    else:
+      self._mode = ''
+
+  async def _refresh_volume(self):
+    try:
       volume = await self.api.get_volume()
       if volume:
-        self._volume = int(volume[0]) / self._max_volume
-      "Get Mute State"
-      muted = await self.api.get_muted()
-      if muted:
-        self._muted = muted
+        self._volume = int(volume) / self._max_volume
+    except Exception:
+      _LOGGER.error("Failed to get volume")
+
+  async def _refresh_mute(self):
+    muted = await self.api.get_muted()
+    if muted:
+      self._muted = muted
+
+  async def _refresh_media_info(self):
+    title = await self.api.get_radio_info()
+    if title:
+      self._media_title = str(title)
+    image = await self.api.get_radio_image()
+    if image:
+      self._image_url = str(image)
 
 async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
     """Set up the Samsung MultiRoom platform asynchronously."""
@@ -363,3 +377,20 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
     session = async_get_clientsession(hass)
     api = MultiRoomApi(ip, port, session, hass)
     async_add_entities([MultiRoomDevice(name, max_volume, power_options, api, unique_id)], True)
+
+async def async_setup_entry(hass, config_entry, async_add_entities):
+    """Set up Samsung Soundbar from a config entry."""
+    data = config_entry.data
+    ip = data[CONF_HOST]
+    port = data.get(CONF_PORT, DEFAULT_PORT)
+    name = data.get(CONF_NAME, DEFAULT_NAME)
+    max_volume = int(data.get(CONF_MAX_VOLUME, DEFAULT_MAX_VOLUME))
+    if max_volume <= 0 or max_volume >= 100:
+      max_volume = 100
+    power_options = data.get(CONF_POWER_OPTIONS, DEFAULT_POWER_OPTIONS)
+    session = async_get_clientsession(hass)
+    api = MultiRoomApi(ip, port, session, hass)
+    async_add_entities(
+        [MultiRoomDevice(name, max_volume, power_options, api, config_entry.entry_id)],
+        True,
+    )

@@ -1,0 +1,28 @@
+{
+  "config": {
+    "title": "Samsung Soundbar",
+    "step": {
+      "confirm": {
+        "title": "Confirm Samsung Soundbar",
+        "description": "Found **{name}** at `{host}`. Do you want to add it?"
+      },
+      "user": {
+        "title": "Set up Samsung Soundbar",
+        "data": {
+          "host": "Host",
+          "name": "Name",
+          "port": "Port",
+          "max_volume": "Max Volume",
+          "power_options": "Enable Power Control"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to the soundbar. Verify the host and port."
+    },
+    "abort": {
+      "already_configured": "This soundbar is already configured.",
+      "not_samsung_soundbar": "The discovered device is not a Samsung WAM soundbar."
+    }
+  }
+}
