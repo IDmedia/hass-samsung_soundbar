@@ -122,9 +122,6 @@ class MultiRoomApi():
     _LOGGER.warning("_exec_get_xml: no %s response after %d attempts", expected_method, retries)
     return None
 
-  async def _exec_get(self, mode, action, key_to_extract):
-    return await self._exec_cmd_legacy(mode, '<name>{0}</name>'.format(action), key_to_extract)
-
   async def _exec_set(self, mode, action, property_name, value):
     if type(value) is str:
       value_type = 'str'
@@ -149,9 +146,6 @@ class MultiRoomApi():
 
   async def set_state(self, key):
     await self._exec_set('UIC','SetPowerStatus', 'powerStatus', int(key))
-
-  async def get_main_info(self):
-    return await self._exec_get('UIC','GetMainInfo')
 
   async def get_volume(self):
     response = await self._exec_get_xml('UIC', 'GetVolume', 'VolumeLevel')
