@@ -142,9 +142,9 @@ class MultiRoomApi():
     return await self._exec_cmd_legacy(mode, cmd, property_name)
 
   async def get_state(self):
-    result = await self._exec_get('UIC','GetPowerStatus', '<powerStatus>(.*?)</powerStatus>')
-    if result:
-      return result[0]
+    response = await self._exec_get_xml('UIC', 'GetPowerStatus', 'PowerStatus')
+    if response:
+      return response.get('powerStatus')
     return 0
 
   async def set_state(self, key):
@@ -154,22 +154,27 @@ class MultiRoomApi():
     return await self._exec_get('UIC','GetMainInfo')
 
   async def get_volume(self):
-    return await self._exec_get('UIC','GetVolume', '<volume>(.*?)</volume')
+    response = await self._exec_get_xml('UIC', 'GetVolume', 'VolumeLevel')
+    return response.get('volume') if response else None
 
   async def set_volume(self, volume):
     await self._exec_set('UIC','SetVolume', 'volume', int(volume))
 
   async def get_speaker_name(self):
-    return await self._exec_get('UIC','GetSpkName', r'<spkname>(?:<!\[CDATA\[)?(.*?)(?:]]>)?</spkname>')
+    response = await self._exec_get_xml('UIC', 'GetSpkName', 'SpkName')
+    return response.get('spkname') if response else None
 
   async def get_radio_info(self):
-    return await self._exec_get('CPM','GetRadioInfo', '<title>(.*?)</title>')
+    response = await self._exec_get_xml('CPM', 'GetRadioInfo', 'RadioInfo')
+    return response.get('title') if response else None
 
   async def get_radio_image(self):
-    return await self._exec_get('CPM','GetRadioInfo', '<thumbnail>(.*?)</thumbnail>')
+    response = await self._exec_get_xml('CPM', 'GetRadioInfo', 'RadioInfo')
+    return response.get('thumbnail') if response else None
 
   async def get_muted(self):
-    return await self._exec_get('UIC','GetMute', '<mute>(.*?)</mute>') == BOOL_ON
+    response = await self._exec_get_xml('UIC', 'GetMute', 'MuteStatus')
+    return response.get('mute') == BOOL_ON if response else False
 
   async def set_muted(self, mute):
     if mute:
@@ -361,8 +366,8 @@ class MultiRoomDevice(MediaPlayerEntity):
   async def _refresh_volume(self):
     try:
       volume = await self.api.get_volume()
-      if volume and volume[0]:
-        self._volume = int(volume[0]) / self._max_volume
+      if volume:
+        self._volume = int(volume) / self._max_volume
     except Exception:
       _LOGGER.error("Failed to get volume")
 
@@ -374,10 +379,10 @@ class MultiRoomDevice(MediaPlayerEntity):
   async def _refresh_media_info(self):
     title = await self.api.get_radio_info()
     if title:
-      self._media_title = str(title[0])
+      self._media_title = str(title)
     image = await self.api.get_radio_image()
     if image:
-      self._image_url = str(image[0])
+      self._image_url = str(image)
 
 async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
     """Set up the Samsung MultiRoom platform asynchronously."""
