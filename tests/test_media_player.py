@@ -122,6 +122,79 @@ def _make_api(xml_response):
   return MultiRoomApi("192.168.1.100", "56001", session, None)
 
 
+def _make_api_multi(xml_responses):
+  """Return a MultiRoomApi whose session yields xml_responses in sequence."""
+  mock_response = MagicMock()
+  mock_response.text = AsyncMock(side_effect=xml_responses)
+  session = MagicMock()
+  session.get = AsyncMock(return_value=mock_response)
+  return MultiRoomApi("192.168.1.100", "56001", session, None)
+
+
+# --- _exec_get_xml ---
+
+VOLUME_XML = '<UIC><method>VolumeLevel</method><response result="ok"><volume>10</volume></response></UIC>'
+POWER_XML  = '<UIC><method>PowerStatus</method><response result="ok"><powerStatus>1</powerStatus></response></UIC>'
+PUSH_XML   = '<UIC><method>PowerStatus</method><response result="ok"><powerStatus>1</powerStatus></response></UIC>'
+
+
+async def test_exec_get_xml_happy_path():
+  """Returns the response dict when the method matches on the first attempt."""
+  api = _make_api(VOLUME_XML)
+  result = await api._exec_get_xml('UIC', 'GetVolume', 'VolumeLevel')
+  assert result == {'@result': 'ok', 'volume': '10'}
+
+
+async def test_exec_get_xml_no_data():
+  """Returns None immediately when _exec_cmd returns no data (e.g. timeout)."""
+  api = _make_api_multi([None])
+  with patch.object(api, '_exec_cmd', AsyncMock(return_value=None)):
+    result = await api._exec_get_xml('UIC', 'GetVolume', 'VolumeLevel')
+  assert result is None
+
+
+async def test_exec_get_xml_parse_exception():
+  """Returns None when the response is not valid XML."""
+  api = _make_api("not xml at all")
+  result = await api._exec_get_xml('UIC', 'GetVolume', 'VolumeLevel')
+  assert result is None
+
+
+async def test_exec_get_xml_wrong_result():
+  """Returns None when the response result is not 'ok'."""
+  api = _make_api('<UIC><method>VolumeLevel</method><response result="ng"><volume>10</volume></response></UIC>')
+  result = await api._exec_get_xml('UIC', 'GetVolume', 'VolumeLevel')
+  assert result is None
+
+
+async def test_exec_get_xml_retry_on_wrong_method():
+  """Retries when the first response has the wrong method, succeeds on the second."""
+  api = _make_api_multi([PUSH_XML, VOLUME_XML])
+  with patch.object(api, '_exec_cmd', AsyncMock(side_effect=[PUSH_XML, VOLUME_XML])):
+    result = await api._exec_get_xml('UIC', 'GetVolume', 'VolumeLevel')
+  assert result == {'@result': 'ok', 'volume': '10'}
+
+
+async def test_exec_get_xml_exhausts_retries():
+  """Returns None after all retries are consumed by wrong-method responses."""
+  push_responses = [PUSH_XML] * 3
+  with patch('custom_components.samsung_soundbar.media_player.MultiRoomApi._exec_cmd',
+             AsyncMock(side_effect=push_responses)):
+    api = MultiRoomApi("192.168.1.100", "56001", MagicMock(), None)
+    result = await api._exec_get_xml('UIC', 'GetVolume', 'VolumeLevel', retries=3)
+  assert result is None
+
+
+async def test_exec_get_xml_timeout_passed_through():
+  """The timeout argument is forwarded to _exec_cmd."""
+  api = _make_api(VOLUME_XML)
+  with patch.object(api, '_exec_cmd', AsyncMock(return_value=VOLUME_XML)) as mock_cmd:
+    await api._exec_get_xml('UIC', 'GetVolume', 'VolumeLevel', timeout=0.5)
+  mock_cmd.assert_called_once_with('UIC', '<name>GetVolume</name>', timeout=0.5)
+
+
+# --- existing get_* tests (legacy regex path) ---
+
 async def test_get_speaker_name_plain(hass):
   """get_speaker_name returns the name when it is a plain string."""
   api = _make_api("<UIC><response result='ok'><spkname>Office Soundbar</spkname></response></UIC>")

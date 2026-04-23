@@ -102,6 +102,26 @@ class MultiRoomApi():
       _LOGGER.debug("exception")
       return None
 
+  async def _exec_get_xml(self, mode, action, expected_method, retries=3, timeout=TIMEOUT):
+    for attempt in range(retries):
+      data = await self._exec_cmd(mode, '<name>{0}</name>'.format(action), timeout=timeout)
+      if not data:
+        return None
+      try:
+        parsed = xmltodict.parse(data)
+        node = parsed.get(mode, {})
+        if node.get('method') != expected_method:
+          _LOGGER.debug("_exec_get_xml: expected method %s, got %s (attempt %d/%d)", expected_method, node.get('method'), attempt + 1, retries)
+          continue
+        response = node.get('response', {})
+        if response.get('@result') != 'ok':
+          return None
+        return response
+      except Exception:
+        return None
+    _LOGGER.warning("_exec_get_xml: no %s response after %d attempts", expected_method, retries)
+    return None
+
   async def _exec_get(self, mode, action, key_to_extract):
     return await self._exec_cmd_legacy(mode, '<name>{0}</name>'.format(action), key_to_extract)
 
