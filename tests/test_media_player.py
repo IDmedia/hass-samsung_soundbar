@@ -279,10 +279,28 @@ async def test_get_source_wifi_other_submode(hass):
   assert result == {'mode': 'wifi', 'submode': False}
 
 
-async def test_get_source_wifi_non_currentfunc_response(hass):
-  """get_source infers wifi when GetFunc returns any non-CurrentFunc response."""
-  api = _make_api('<UIC><method>VolumeLevel</method><version>1.0</version><response result="ok"><volume>10</volume></response></UIC>')
-  result = await api.get_source()
+async def test_get_source_wifi_on_exhausted_retries():
+  """get_source falls back to wifi after all retries return push events instead of CurrentFunc."""
+  api = MultiRoomApi("192.168.1.100", "56001", MagicMock(), None)
+  with patch.object(api, '_exec_cmd', AsyncMock(side_effect=[PUSH_XML, PUSH_XML, PUSH_XML])):
+    result = await api.get_source()
+  assert result == {'mode': 'wifi', 'submode': False}
+
+
+async def test_get_source_retries_past_push_event():
+  """get_source discards a push event and succeeds on the next attempt."""
+  good = '<UIC><method>CurrentFunc</method><response result="ok"><function>hdmi1</function><submode></submode></response></UIC>'
+  api = MultiRoomApi("192.168.1.100", "56001", MagicMock(), None)
+  with patch.object(api, '_exec_cmd', AsyncMock(side_effect=[PUSH_XML, good])):
+    result = await api.get_source()
+  assert result == {'mode': 'hdmi1', 'submode': False}
+
+
+async def test_get_source_wifi_on_push_then_timeout():
+  """get_source falls back to wifi when a push event is followed by a timeout (None)."""
+  api = MultiRoomApi("192.168.1.100", "56001", MagicMock(), None)
+  with patch.object(api, '_exec_cmd', AsyncMock(side_effect=[PUSH_XML, None])):
+    result = await api.get_source()
   assert result == {'mode': 'wifi', 'submode': False}
 
 

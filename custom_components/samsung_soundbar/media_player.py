@@ -183,31 +183,19 @@ class MultiRoomApi():
       await self._exec_set('UIC','SetMute', 'mute', BOOL_OFF)
 
   async def get_source(self):
-    wifi_fallback = {'mode': 'wifi', 'submode': False}
-    data = await self._exec_cmd('UIC', '<name>GetFunc</name>', timeout=0.5)
-    if not data:
-      # GetFunc in WiFi mode blocks until an unsolicited push event (e.g. VolumeLevel) arrives
-      # instead of responding with CurrentFunc, so a timeout or empty response means WiFi mode.
-      return wifi_fallback
-    try:
-      parsed = xmltodict.parse(data)
-      uic = parsed.get('UIC', {})
-      # A non-CurrentFunc response (e.g. VolumeLevel, PowerStatus) also indicates WiFi mode.
-      # These are just unsolicited push events that happen to arrive while we're waiting.
-      if uic.get('method') != 'CurrentFunc':
-        return wifi_fallback
-      response = uic.get('response', {})
-      if response.get('@result') != 'ok':
-        return None
-      function = response.get('function')
-      if function is None:
-        return None
-      if function == 'bt':
-        return {'mode': function, 'submode': False}
-      submode = response.get('submode')
-      return {'mode': function, 'submode': 'TuneIn' if submode == 'cp' else False}
-    except Exception:
+    # GetFunc in WiFi mode never returns CurrentFunc — it times out or delivers push events.
+    # _exec_get_xml retries on wrong-method responses and returns None on timeout or exhaustion;
+    # both map to wifi_fallback here.
+    response = await self._exec_get_xml('UIC', 'GetFunc', 'CurrentFunc', timeout=0.5)
+    if response is None:
+      return {'mode': 'wifi', 'submode': False}
+    function = response.get('function')
+    if function is None:
       return None
+    if function == 'bt':
+      return {'mode': function, 'submode': False}
+    submode = response.get('submode')
+    return {'mode': function, 'submode': 'TuneIn' if submode == 'cp' else False}
 
   async def set_source(self, source):
     SEPARATOR = ' - '
