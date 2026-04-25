@@ -426,3 +426,66 @@ async def test_update_power_options_device_off_clears_title(hass):
   assert entity._state == STATE_OFF
   assert entity._media_title == ''
   assert entity._image_url is None
+
+
+# --- get_main_info ---
+
+MAIN_INFO_XML = (
+  '<UIC><method>MainInfo</method><response result="ok">'
+  '<spkmacaddr>70:b1:3d:ce:19:64</spkmacaddr>'
+  '<spkmodelname>HW-Q900A</spkmodelname>'
+  '</response></UIC>'
+)
+
+
+async def test_get_main_info_happy_path():
+  """get_main_info returns a dict with spkmacaddr and spkmodelname."""
+  api = _make_api(MAIN_INFO_XML)
+  result = await api.get_main_info()
+  assert result['spkmacaddr'] == '70:b1:3d:ce:19:64'
+  assert result['spkmodelname'] == 'HW-Q900A'
+
+
+async def test_get_main_info_offline():
+  """get_main_info returns None when the device is unreachable."""
+  api = MultiRoomApi("192.168.1.100", "56001", MagicMock(), None)
+  with patch.object(api, '_exec_cmd', AsyncMock(return_value=None)):
+    result = await api.get_main_info()
+  assert result is None
+
+
+async def test_get_main_info_ng_result():
+  """get_main_info returns None when the response result is not 'ok'."""
+  api = _make_api(
+    '<UIC><method>MainInfo</method><response result="ng">'
+    '<spkmacaddr>70:b1:3d:ce:19:64</spkmacaddr>'
+    '</response></UIC>'
+  )
+  result = await api.get_main_info()
+  assert result is None
+
+
+# --- get_software_version ---
+
+SW_VERSION_XML = (
+  '<UIC><method>SoftwareVersion</method><response result="ok">'
+  '<version>HW-Q900AWWB-1011.1</version>'
+  '<displayversion>HW-Q900AWWB-1011.1</displayversion>'
+  '</response></UIC>'
+)
+
+
+async def test_get_software_version_happy_path():
+  """get_software_version returns a dict with version and displayversion."""
+  api = _make_api(SW_VERSION_XML)
+  result = await api.get_software_version()
+  assert result['version'] == 'HW-Q900AWWB-1011.1'
+  assert result['displayversion'] == 'HW-Q900AWWB-1011.1'
+
+
+async def test_get_software_version_offline():
+  """get_software_version returns None when the device is unreachable."""
+  api = MultiRoomApi("192.168.1.100", "56001", MagicMock(), None)
+  with patch.object(api, '_exec_cmd', AsyncMock(return_value=None)):
+    result = await api.get_software_version()
+  assert result is None

@@ -193,6 +193,14 @@ class MultiRoomApi():
     submode = response.get('submode')
     return {'mode': function, 'submode': 'TuneIn' if submode == 'cp' else False}
 
+  async def get_main_info(self):
+    response = await self._exec_get_xml('UIC', 'GetMainInfo', 'MainInfo')
+    return response if response else None
+
+  async def get_software_version(self):
+    response = await self._exec_get_xml('UIC', 'GetSoftwareVersion', 'SoftwareVersion')
+    return response if response else None
+
   async def set_source(self, source):
     SEPARATOR = ' - '
     if SEPARATOR in source:
