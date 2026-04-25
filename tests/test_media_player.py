@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from custom_components.samsung_soundbar.media_player import MultiRoomApi
 
-from homeassistant.const import CONF_HOST, CONF_NAME
+from homeassistant.const import CONF_HOST, CONF_NAME, STATE_OFF
 
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -257,20 +257,11 @@ async def test_get_source_physical_input(hass):
   result = await api.get_source()
   assert result == {'mode': 'hdmi1', 'submode': False}
 
-
-async def test_get_source_bluetooth(hass):
-  """get_source returns {'mode': 'bt', 'submode': False} for Bluetooth (no submode lookup)."""
-  api = _make_api('<UIC><method>CurrentFunc</method><response result="ok"><function>bt</function></response></UIC>')
-  result = await api.get_source()
-  assert result == {'mode': 'bt', 'submode': False}
-
-
 async def test_get_source_wifi_tunein(hass):
   """get_source returns {'mode': 'wifi', 'submode': 'TuneIn'} when submode is 'cp' (streaming)."""
   api = _make_api('<UIC><method>CurrentFunc</method><response result="ok"><function>wifi</function><submode>cp</submode></response></UIC>')
   result = await api.get_source()
   assert result == {'mode': 'wifi', 'submode': 'TuneIn'}
-
 
 async def test_get_source_wifi_other_submode(hass):
   """get_source returns {'mode': 'wifi', 'submode': False} for wifi with a non-cp submode."""
@@ -278,11 +269,12 @@ async def test_get_source_wifi_other_submode(hass):
   result = await api.get_source()
   assert result == {'mode': 'wifi', 'submode': False}
 
-
 async def test_get_source_wifi_on_exhausted_retries():
   """get_source falls back to wifi after all retries return push events instead of CurrentFunc."""
   api = MultiRoomApi("192.168.1.100", "56001", MagicMock(), None)
-  with patch.object(api, '_exec_cmd', AsyncMock(side_effect=[PUSH_XML, PUSH_XML, PUSH_XML])):
+  with patch.object(api, '_exec_cmd', AsyncMock(side_effect=[PUSH_XML, PUSH_XML, PUSH_XML])), \
+       patch('custom_components.samsung_soundbar.media_player.is_airplay_active',
+             new=AsyncMock(return_value=False)):
     result = await api.get_source()
   assert result == {'mode': 'wifi', 'submode': False}
 
@@ -299,9 +291,65 @@ async def test_get_source_retries_past_push_event():
 async def test_get_source_wifi_on_push_then_timeout():
   """get_source falls back to wifi when a push event is followed by a timeout (None)."""
   api = MultiRoomApi("192.168.1.100", "56001", MagicMock(), None)
-  with patch.object(api, '_exec_cmd', AsyncMock(side_effect=[PUSH_XML, None])):
+  with patch.object(api, '_exec_cmd', AsyncMock(side_effect=[PUSH_XML, None])), \
+       patch('custom_components.samsung_soundbar.media_player.is_airplay_active',
+             new=AsyncMock(return_value=False)):
     result = await api.get_source()
   assert result == {'mode': 'wifi', 'submode': False}
+
+
+# --- get_source AirPlay probe ---
+
+async def test_get_source_wifi_fallback_airplay_active():
+  """When GetFunc times out and is_airplay_active returns True, submode is 'AirPlay'."""
+  api = MultiRoomApi("192.168.1.100", "56001", MagicMock(), None)
+  with patch.object(api, '_exec_cmd', AsyncMock(return_value=None)), \
+       patch('custom_components.samsung_soundbar.media_player.is_airplay_active',
+             new=AsyncMock(return_value=True)) as mock_probe:
+    result = await api.get_source()
+  assert result == {'mode': 'wifi', 'submode': 'AirPlay'}
+  mock_probe.assert_called_once_with("192.168.1.100")
+
+
+async def test_get_source_wifi_fallback_airplay_inactive():
+  """When GetFunc times out and is_airplay_active returns False, submode is False."""
+  api = MultiRoomApi("192.168.1.100", "56001", MagicMock(), None)
+  with patch.object(api, '_exec_cmd', AsyncMock(return_value=None)), \
+       patch('custom_components.samsung_soundbar.media_player.is_airplay_active',
+             new=AsyncMock(return_value=False)) as mock_probe:
+    result = await api.get_source()
+  assert result == {'mode': 'wifi', 'submode': False}
+  mock_probe.assert_called_once_with("192.168.1.100")
+
+
+async def test_get_source_physical_input_no_airplay_probe():
+  """Physical input → is_airplay_active is never called."""
+  api = _make_api('<UIC><method>CurrentFunc</method><response result="ok"><function>hdmi1</function><submode></submode></response></UIC>')
+  with patch('custom_components.samsung_soundbar.media_player.is_airplay_active',
+             new=AsyncMock(return_value=True)) as mock_probe:
+    result = await api.get_source()
+  assert result == {'mode': 'hdmi1', 'submode': False}
+  mock_probe.assert_not_called()
+
+
+async def test_get_source_bt_no_airplay_probe():
+  """Bluetooth → is_airplay_active is never called."""
+  api = _make_api('<UIC><method>CurrentFunc</method><response result="ok"><function>bt</function></response></UIC>')
+  with patch('custom_components.samsung_soundbar.media_player.is_airplay_active',
+             new=AsyncMock(return_value=True)) as mock_probe:
+    result = await api.get_source()
+  assert result == {'mode': 'bt', 'submode': False}
+  mock_probe.assert_not_called()
+
+
+async def test_get_source_tunein_no_airplay_probe():
+  """TuneIn (GetFunc returns CurrentFunc) → is_airplay_active is never called."""
+  api = _make_api('<UIC><method>CurrentFunc</method><response result="ok"><function>wifi</function><submode>cp</submode></response></UIC>')
+  with patch('custom_components.samsung_soundbar.media_player.is_airplay_active',
+             new=AsyncMock(return_value=True)) as mock_probe:
+    result = await api.get_source()
+  assert result == {'mode': 'wifi', 'submode': 'TuneIn'}
+  mock_probe.assert_not_called()
 
 
 async def test_yaml_update_scales_volume_from_device_nondefault_max(hass):
@@ -316,3 +364,65 @@ async def test_yaml_update_scales_volume_from_device_nondefault_max(hass):
   await entity.async_update()
 
   assert entity._volume == 0.25
+
+
+# --- _update_with_power_options ---
+
+async def test_update_power_options_airplay_sets_title(hass):
+  """AirPlay mode → _media_title='AirPlay', _image_url=None."""
+  entities = await _setup_entry(hass, BASE_ENTRY_DATA)
+  entity = entities[0]
+  entity.api.get_state = AsyncMock(return_value="1")
+  entity.api.get_source = AsyncMock(return_value={'mode': 'wifi', 'submode': 'AirPlay'})
+  entity.api.get_volume = AsyncMock(return_value="10")
+  entity.api.get_muted = AsyncMock(return_value=False)
+
+  await entity._update_with_power_options()
+
+  assert entity._media_title == 'AirPlay'
+  assert entity._image_url is None
+
+
+async def test_update_power_options_tunein_calls_refresh_media(hass):
+  """TuneIn mode → _refresh_media_info is called; title and image are populated."""
+  entities = await _setup_entry(hass, BASE_ENTRY_DATA)
+  entity = entities[0]
+  entity.api.get_state = AsyncMock(return_value="1")
+  entity.api.get_source = AsyncMock(return_value={'mode': 'wifi', 'submode': 'TuneIn'})
+  entity.api.get_volume = AsyncMock(return_value="10")
+  entity.api.get_muted = AsyncMock(return_value=False)
+  entity.api.get_radio_info = AsyncMock(return_value="Radio Song")
+  entity.api.get_radio_image = AsyncMock(return_value="http://example.com/img.jpg")
+
+  await entity._update_with_power_options()
+
+  assert entity._media_title == 'Radio Song'
+  assert entity._image_url == "http://example.com/img.jpg"
+
+
+async def test_update_power_options_idle_wifi_clears_title(hass):
+  """Idle WiFi mode → _media_title='', _image_url=None."""
+  entities = await _setup_entry(hass, BASE_ENTRY_DATA)
+  entity = entities[0]
+  entity.api.get_state = AsyncMock(return_value="1")
+  entity.api.get_source = AsyncMock(return_value={'mode': 'wifi', 'submode': False})
+  entity.api.get_volume = AsyncMock(return_value="10")
+  entity.api.get_muted = AsyncMock(return_value=False)
+
+  await entity._update_with_power_options()
+
+  assert entity._media_title == ''
+  assert entity._image_url is None
+
+
+async def test_update_power_options_device_off_clears_title(hass):
+  """Device off → state=STATE_OFF, _media_title='', _image_url=None."""
+  entities = await _setup_entry(hass, BASE_ENTRY_DATA)
+  entity = entities[0]
+  entity.api.get_state = AsyncMock(return_value="0")
+
+  await entity._update_with_power_options()
+
+  assert entity._state == STATE_OFF
+  assert entity._media_title == ''
+  assert entity._image_url is None

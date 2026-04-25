@@ -34,6 +34,7 @@ from homeassistant.const import (
   STATE_OFF
 )
 
+from .airplay_detect import is_airplay_active
 from .const import (
   DEFAULT_NAME,
   DEFAULT_PORT,
@@ -182,7 +183,8 @@ class MultiRoomApi():
     # both map to wifi_fallback here.
     response = await self._exec_get_xml('UIC', 'GetFunc', 'CurrentFunc', timeout=0.5)
     if response is None:
-      return {'mode': 'wifi', 'submode': False}
+      airplay = await is_airplay_active(self.ip)
+      return {'mode': 'wifi', 'submode': 'AirPlay' if airplay else False}
     function = response.get('function')
     if function is None:
       return None
@@ -315,6 +317,9 @@ class MultiRoomDevice(MediaPlayerEntity):
       await self._refresh_active_state()
       if self._mode == 'TuneIn':
         await self._refresh_media_info()
+      elif self._mode == 'AirPlay':
+        self._media_title = 'AirPlay'
+        self._image_url = None
       else:
         self._media_title = ''
         self._image_url = None
