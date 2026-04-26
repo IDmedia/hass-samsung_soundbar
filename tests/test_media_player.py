@@ -489,3 +489,55 @@ async def test_get_software_version_offline():
   with patch.object(api, '_exec_cmd', AsyncMock(return_value=None)):
     result = await api.get_software_version()
   assert result is None
+
+
+# --- MultiRoomDevice device_info ---
+
+async def test_device_info_identifiers(hass):
+  """device_info identifiers use (DOMAIN, unique_id)."""
+  entities = await _setup_entry(hass, BASE_ENTRY_DATA)
+  entity = entities[0]
+  assert (DOMAIN, entity._attr_unique_id) in entity._attr_device_info['identifiers']
+
+
+async def test_device_info_manufacturer(hass):
+  """device_info manufacturer is 'Samsung'."""
+  entities = await _setup_entry(hass, BASE_ENTRY_DATA)
+  entity = entities[0]
+  assert entity._attr_device_info['manufacturer'] == 'Samsung'
+
+
+async def test_fetch_model_if_needed_populates_model(hass):
+  """_fetch_model_if_needed sets device_info['model'] on first successful call."""
+  entities = await _setup_entry(hass, BASE_ENTRY_DATA)
+  entity = entities[0]
+  entity.api.get_main_info = AsyncMock(return_value={'spkmodelname': 'HW-Q900A'})
+
+  await entity._fetch_model_if_needed()
+
+  assert entity._attr_device_info['model'] == 'HW-Q900A'
+  assert entity._model_fetched is True
+
+
+async def test_fetch_model_if_needed_no_second_call(hass):
+  """_fetch_model_if_needed makes no API call after _model_fetched is True."""
+  entities = await _setup_entry(hass, BASE_ENTRY_DATA)
+  entity = entities[0]
+  entity.api.get_main_info = AsyncMock(return_value={'spkmodelname': 'HW-Q900A'})
+
+  await entity._fetch_model_if_needed()
+  await entity._fetch_model_if_needed()
+
+  entity.api.get_main_info.assert_called_once()
+
+
+async def test_fetch_model_if_needed_offline_no_crash(hass):
+  """_fetch_model_if_needed does not raise when get_main_info returns None."""
+  entities = await _setup_entry(hass, BASE_ENTRY_DATA)
+  entity = entities[0]
+  entity.api.get_main_info = AsyncMock(return_value=None)
+
+  await entity._fetch_model_if_needed()
+
+  assert entity._model_fetched is False
+  assert 'model' not in entity._attr_device_info

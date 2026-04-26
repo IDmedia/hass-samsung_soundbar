@@ -10,6 +10,7 @@ import homeassistant.util as util
 
 from datetime import timedelta
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.device_registry import DeviceInfo
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -36,6 +37,7 @@ from homeassistant.const import (
 
 from .airplay_detect import is_airplay_active
 from .const import (
+  DOMAIN,
   DEFAULT_NAME,
   DEFAULT_PORT,
   DEFAULT_MAX_VOLUME,
@@ -225,6 +227,12 @@ class MultiRoomDevice(MediaPlayerEntity):
     self._max_volume = max_volume
     self._power_options = power_options
     self._attr_unique_id = unique_id
+    self._model_fetched = False
+    self._attr_device_info = DeviceInfo(
+      identifiers={(DOMAIN, unique_id)},
+      manufacturer="Samsung",
+      name=name,
+    )
 
   @property
   def supported_features(self):
@@ -316,6 +324,7 @@ class MultiRoomDevice(MediaPlayerEntity):
       await self._update_with_power_options()
     else:
       await self._update_without_power_options()
+    await self._fetch_model_if_needed()
 
   async def _update_with_power_options(self):
     state = await self.api.get_state()
@@ -378,6 +387,16 @@ class MultiRoomDevice(MediaPlayerEntity):
     image = await self.api.get_radio_image()
     if image:
       self._image_url = str(image)
+
+  async def _fetch_model_if_needed(self) -> None:
+    if self._model_fetched:
+      return
+    main_info = await self.api.get_main_info()
+    if main_info:
+      model = main_info.get('spkmodelname')
+      if model:
+        self._attr_device_info['model'] = model
+        self._model_fetched = True
 
 async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
     """Set up the Samsung MultiRoom platform asynchronously."""
