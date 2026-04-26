@@ -1,4 +1,10 @@
 {
+  "entity": {
+    "sensor": {
+      "mac_address": { "name": "MAC Address" },
+      "firmware":    { "name": "Firmware Version" }
+    }
+  },
   "config": {
     "title": "Samsung Soundbar",
     "step": {
