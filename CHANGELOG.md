@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.4.0 (2026-05-09)
+
+- Soundbar is now registered as a device in the Home Assistant device registry, with manufacturer ("Samsung") and model name populated from the device
+- Added two diagnostic sensor entities: MAC Address and Firmware Version
+
 ## 1.3.0 (2026-04-25)
 
 - Added AirPlay source detection for soundbars in Wifi mode; probes using mDNS
