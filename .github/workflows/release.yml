@@ -14,7 +14,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Get version from manifest
         id: version
@@ -66,10 +66,10 @@ jobs:
 
       - name: Create GitHub release
         if: ${{ !inputs.dry_run }}
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ steps.version.outputs.version }}
-          name: v${{ steps.version.outputs.version }}
-          body: ${{ steps.notes.outputs.notes }}
-          draft: false
-          prerelease: false
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${{ steps.version.outputs.version }}" \
+            --target "${{ github.sha }}" \
+            --title "v${{ steps.version.outputs.version }}" \
+            --notes "${{ steps.notes.outputs.notes }}"
